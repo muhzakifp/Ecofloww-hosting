@@ -2,7 +2,7 @@ import axios from 'axios';
 import { auth } from '@/lib/firebase';
 
 const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL || '',
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'https://ecofloww-hosting-production.up.railway.app',
   timeout: 10000,
 });
 

@@ -68,17 +68,31 @@ REDIS_URL = os.getenv("REDIS_URL", "")
 
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
+
+#app.add_middleware(
+#    CORSMiddleware,
+#    allow_origins=["*"],
+#    allow_credentials=True,
+#    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+#    allow_headers=["*"],
+#    expose_headers=["*"]
+#)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"https://.*\.vercel\.app|http://localhost:\d+",
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=["*"]
+    expose_headers=["*"],
 )
+
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
+    if request.method == "OPTIONS" :
+        return await call_next(request)
+    
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
@@ -97,7 +111,10 @@ async def add_security_headers(request: Request, call_next):
         )
     else:
         # Strict CSP for other endpoints
-        response.headers["Content-Security-Policy"] = "default-src 'self'"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "connect-src 'self' https://*.vercel.app https://ecofloww-hosting-production.up.railway.app;"
+        )
     
     return response
 

@@ -5,10 +5,12 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
 from collections import defaultdict, deque
+from contextlib import asynccontextmanager
 import logging
 import os
 import time
 import re
+
 from app.core.database import get_db, engine, Base
 from app.core.auth import get_current_user
 from app.models.base import User, FermentationBatch, FermentationLog, ProductTemplate, BatchDailyLog, RoadmapProgress, ProductRecommendation
@@ -32,8 +34,6 @@ from app.api.sensors import router as sensors_router
 from app.api.community import router as community_router
 
 logger = logging.getLogger(__name__)
-
-from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -61,25 +61,37 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="EcoFlow API", version="0.1.0", lifespan=lifespan)
 
-ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,*.up.railway.app,*.railway.app").split(",") if h.strip()]
-CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,https://ecoflow-hosting.vercel.app,https://ecofloww-hosting.vercel.app/").split(",") if o.strip()]
+# --- CONFIGURATIONS ---
+# Pastikan tidak ada trailing slash pada origin domain!
+ALLOWED_HOSTS = ["*"]
+CORS_ORIGINS = [
+    "https://ecofloww-hosting.vercel.app",
+    "https://ecoflow-hosting.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3001",
+]
+
+# Tambahkan nilai dari environment variable jika ada
+env_cors = os.getenv("CORS_ORIGINS", "")
+if env_cors:
+    for o in env_cors.split(","):
+        cleaned = o.strip().rstrip("/")
+        if cleaned and cleaned not in CORS_ORIGINS:
+            CORS_ORIGINS.append(cleaned)
+
 RATE_LIMIT = int(os.getenv("RATE_LIMIT", "60"))
 RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
 REDIS_URL = os.getenv("REDIS_URL", "")
 
-# TrustedHostMiddleware dengan wildcard support untuk Railway
+
+# --- MIDDLEWARE (Urutan Didaftarkan Dari Dalam Ke Luar) ---
+
+# 1. Trusted Host (Didaftarkan pertama agar diproses setelah CORS)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
 
-
-#app.add_middleware(
-#    CORSMiddleware,
-#    allow_origins=["*"],
-#    allow_credentials=True,
-#    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-#    allow_headers=["*"],
-#    expose_headers=["*"]
-#)
-
+# 2. CORS Middleware (Didaftarkan terakhir agar dieksekusi PALING PERTAMA)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
@@ -89,13 +101,11 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 
-
+# 3. Security Headers Middleware (Bypass OPTIONS secara sempurna)
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
-    # Skip security headers for OPTIONS preflight requests
     if request.method == "OPTIONS":
-        response = await call_next(request)
-        return response
+        return await call_next(request)
     
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -103,7 +113,6 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     
-    # Relaxed CSP for Swagger UI (/docs and /openapi.json)
     if request.url.path in ["/docs", "/openapi.json", "/redoc"] or request.url.path.startswith("/docs/"):
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
@@ -114,7 +123,6 @@ async def add_security_headers(request: Request, call_next):
             "connect-src 'self';"
         )
     else:
-        # Strict CSP for other endpoints
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             "connect-src 'self' https://*.vercel.app https://ecofloww-hosting-production.up.railway.app;"
@@ -122,6 +130,7 @@ async def add_security_headers(request: Request, call_next):
     
     return response
 
+# 4. Rate Limiter Setup & Middleware
 rate_buckets: dict[str, deque[float]] = defaultdict(deque)
 
 try:
@@ -139,7 +148,6 @@ def _rate_limit_key(scope: str, identity: str) -> str:
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
-    # Skip rate limiting for OPTIONS preflight requests
     if request.method == "OPTIONS":
         return await call_next(request)
     
@@ -173,6 +181,7 @@ async def rate_limit_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+# --- ROUTERS ---
 app.include_router(rec_router)
 app.include_router(impact_router)
 app.include_router(roadmap_router)
@@ -182,6 +191,7 @@ app.include_router(sensors_router)
 app.include_router(community_router)
 
 
+# --- ENDPOINTS ---
 @app.post("/api/v1/upload", response_model=APIResponse)
 async def upload_image(
     file: UploadFile = File(...),
@@ -360,7 +370,6 @@ async def create_fermentation_log(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch not found")
     
     try:
-        # PERBAIKAN: Validasi tanggal log tidak boleh sebelum tanggal mulai batch
         incubation_day = (log_data.log_date.date() - batch.start_date.date()).days
         if incubation_day < 0:
             raise HTTPException(
@@ -369,7 +378,6 @@ async def create_fermentation_log(
                        f"tanggal mulai batch ({batch.start_date.date()})"
             )
         
-        # PERBAIKAN: Cek apakah sudah ada log untuk hari fermentasi yang sama
         existing_log = db.query(FermentationLog).filter(
             FermentationLog.batch_id == batch_id,
         ).all()
@@ -382,7 +390,6 @@ async def create_fermentation_log(
                            f"Hapus catatan lama terlebih dahulu jika ingin mengganti."
                 )
         
-        # PERBAIKAN: Validasi suhu dan pH (jika ada)
         if log_data.temperature_c is not None:
             if log_data.temperature_c < -10 or log_data.temperature_c > 60:
                 raise HTTPException(
@@ -502,9 +509,6 @@ async def create_daily_log(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Mencatat progres harian untuk batch eco-enzyme yang sedang aktif.
-    """
     batch = db.query(FermentationBatch).filter(
         FermentationBatch.id == batch_id,
         FermentationBatch.user_id == current_user.id
@@ -543,7 +547,6 @@ async def create_daily_log(
         logger.error(f"Daily log creation error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Failed to create daily log")
 
-
 @app.get("/api/v1/batches/{batch_id}/daily-logs", response_model=APIResponse)
 async def get_batch_daily_logs(
     batch_id: int,
@@ -552,9 +555,6 @@ async def get_batch_daily_logs(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """
-    Mengambil riwayat progres harian dari batch tertentu.
-    """
     batch = db.query(FermentationBatch).filter(
         FermentationBatch.id == batch_id,
         FermentationBatch.user_id == current_user.id
@@ -589,7 +589,6 @@ async def get_batch_daily_logs(
             "has_more": offset + len(logs_data) < total
         }
     )
-
 
 @app.put("/api/v1/batches/{batch_id}/status", response_model=APIResponse)
 async def update_batch_status(
@@ -691,7 +690,6 @@ async def delete_batch(
     )
     
     return APIResponse(status="success", message="Batch berhasil dihapus")
-
 
 @app.get("/health")
 async def health_check():

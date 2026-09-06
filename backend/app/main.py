@@ -61,12 +61,13 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="EcoFlow API", version="0.1.0", lifespan=lifespan)
 
-ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(",") if h.strip()]
-CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001").split(",") if o.strip()]
+ALLOWED_HOSTS = [h.strip() for h in os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1,*.up.railway.app,*.railway.app").split(",") if h.strip()]
+CORS_ORIGINS = [o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000,http://localhost:3001,http://127.0.0.1:3001,https://ecoflow-hosting.vercel.app").split(",") if o.strip()]
 RATE_LIMIT = int(os.getenv("RATE_LIMIT", "60"))
 RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
 REDIS_URL = os.getenv("REDIS_URL", "")
 
+# TrustedHostMiddleware dengan wildcard support untuk Railway
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
 
 
@@ -91,8 +92,10 @@ app.add_middleware(
 
 @app.middleware("http")
 async def add_security_headers(request: Request, call_next):
-    if request.method == "OPTIONS" :
-        return await call_next(request)
+    # Skip security headers for OPTIONS preflight requests
+    if request.method == "OPTIONS":
+        response = await call_next(request)
+        return response
     
     response = await call_next(request)
     response.headers["X-Content-Type-Options"] = "nosniff"
@@ -136,6 +139,10 @@ def _rate_limit_key(scope: str, identity: str) -> str:
 
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):
+    # Skip rate limiting for OPTIONS preflight requests
+    if request.method == "OPTIONS":
+        return await call_next(request)
+    
     client_ip = request.client.host if request.client else "unknown"
     if client_ip in ("127.0.0.1", "::1", "localhost"):
         return await call_next(request)

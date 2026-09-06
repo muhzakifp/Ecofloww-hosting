@@ -8,6 +8,7 @@ from app.schemas.base import APIResponse
 from pydantic import BaseModel, Field
 from typing import Optional
 import logging
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,9 @@ router = APIRouter(prefix="/api/v1/sensors", tags=["IoT Sensors"])
 # 4. Alerts dan notifikasi otomatis
 
 
+IOT_API_KEY = os.getenv("IOT_API_KEY", "")
+
+
 class SensorData(BaseModel):
     batch_id: int = Field(..., description="ID batch fermentasi")
     temperature: Optional[float] = Field(None, ge=-10, le=60, description="Suhu dalam Celsius")
@@ -30,11 +34,21 @@ class SensorData(BaseModel):
     sensor_id: Optional[str] = Field(None, description="ID unik sensor IoT")
 
 
+def verify_iot_api_key(request: Request):
+    api_key = request.headers.get("X-API-Key", "")
+    if not IOT_API_KEY or api_key != IOT_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or missing IoT API key"
+        )
+
+
 @router.post("/webhook", response_model=APIResponse)
 async def iot_sensor_webhook(
     sensor_data: SensorData,
     request: Request,
     db: Session = Depends(get_db),
+    _: None = Depends(verify_iot_api_key),
 ):
     """
     Webhook endpoint untuk menerima data dari sensor IoT hardware.
@@ -85,12 +99,11 @@ async def iot_sensor_webhook(
         
         new_log = FermentationLog(
             batch_id=sensor_data.batch_id,
-            log_date=log_timestamp.date(),
+            log_date=log_timestamp,
             aroma=aroma,
             color=color,
             gas_presence=gas_presence,
-            temperature=sensor_data.temperature,
-            ph=sensor_data.ph,
+            temperature_c=sensor_data.temperature,
             notes=f"Data otomatis dari sensor IoT: {sensor_data.sensor_id or 'unknown'}. "
                   f"Humidity: {sensor_data.humidity}%, Gas Level: {sensor_data.gas_level}%"
         )

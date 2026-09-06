@@ -48,15 +48,22 @@ def verify_token(token: str) -> dict:
         HTTPException: 401 jika token invalid, expired, atau tidak terverifikasi.
     """
     if not FIREBASE_INITIALIZED:
-        # Mode development: accept dummy token for testing
-        if os.getenv("ENVIRONMENT", "development") == "development":
-            logger.warning("Firebase tidak diinisialisasi, menggunakan mode development")
-            return {"uid": "dev_user_001", "email": "dev@example.com", "name": "Development User", "role": "user"}
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                detail="Layanan autentikasi sedang dalam perbaikan"
-            )
+        # Development mode bypass - HANYA untuk local testing
+        # PENTING: Set ALLOW_DEV_AUTH=true DI .env.local SAJA, JANGAN di production!
+        if os.getenv("ALLOW_DEV_AUTH", "false").lower() == "true":
+            logger.warning("⚠️  DEVELOPMENT MODE: Bypassing Firebase auth with mock user")
+            logger.warning("⚠️  JANGAN gunakan ALLOW_DEV_AUTH=true di production!")
+            return {
+                "uid": "dev_user_001",
+                "email": "dev@example.com",
+                "name": "Development User",
+                "role": "user"
+            }
+        
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Layanan autentikasi tidak tersedia. Firebase belum diinisialisasi."
+        )
     
     try:
         decoded_token = auth.verify_id_token(token)

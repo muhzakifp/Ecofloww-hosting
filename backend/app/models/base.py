@@ -155,3 +155,20 @@ class BatchDailyLog(Base):
     updated_at = Column(DateTime, default=utcnow, onupdate=utcnow)
 
     batch = relationship("FermentationBatch", backref="daily_logs")
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
+    action = Column(String, nullable=False, index=True)
+    resource_type = Column(String, nullable=False, index=True)
+    resource_id = Column(String, nullable=True, index=True)
+    details = Column(JSON, nullable=True)
+    ip_address = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+    status = Column(String, default="success")
+    created_at = Column(DateTime, default=utcnow, index=True)
+
+    user = relationship("User", backref="audit_logs")

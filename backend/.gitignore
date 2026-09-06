@@ -11,12 +11,17 @@ firebase-credentials.json
 
 # Python environment
 venv/
+.venv/
 __pycache__/
 .pytest_cache/
 *.py[cod]
+
+# Database files
 *.db
+*.db-journal
 *.sqlite
 *.sqlite3
+ecoflow.db
 
 # DB backups
 backups/

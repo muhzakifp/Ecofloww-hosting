@@ -3,7 +3,7 @@ import csv
 import io
 from typing import List as TList, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 from app.core.database import get_db
@@ -11,6 +11,7 @@ from app.core.auth import get_current_user, require_role
 from app.models.base import Community, ProductTemplate, User
 from app.schemas.base import APIResponse, CommunityCreate, ProductTemplateCreate, ProductTemplateUpdate
 from app.services.admin import AdminService
+from app.services.audit import AuditService
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -245,6 +246,7 @@ async def get_model_metrics(
 async def update_user_role(
     user_id: str,
     req: UserRoleUpdate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     role: str = Depends(require_role("admin", "platform_admin")),
     db: Session = Depends(get_db)
@@ -257,9 +259,25 @@ async def update_user_role(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     
+    old_role = user.role
     user.role = req.role
     db.commit()
     db.refresh(user)
+    
+    AuditService.log_from_request(
+        db=db,
+        request=request,
+        user_id=current_user.id,
+        action="UPDATE_ROLE",
+        resource_type="user",
+        resource_id=user_id,
+        details={
+            "target_user_email": user.email,
+            "old_role": old_role,
+            "new_role": req.role,
+            "changed_by": current_user.email
+        }
+    )
     
     return APIResponse(
         status="success",

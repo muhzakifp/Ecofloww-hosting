@@ -22,6 +22,7 @@ from app.schemas.base import (
 from app.services.eco_enzyme import EcoEnzymeService
 from app.services.fermentation_assistant import FermentationAssistantService
 from app.services.storage import upload_file_to_storage
+from app.services.audit import AuditService
 from app.routes.recommendations import router as rec_router
 from app.routes.impact import router as impact_router
 from app.routes.roadmap import router as roadmap_router
@@ -66,7 +67,7 @@ RATE_LIMIT = int(os.getenv("RATE_LIMIT", "60"))
 RATE_LIMIT_WINDOW = int(os.getenv("RATE_LIMIT_WINDOW", "60"))
 REDIS_URL = os.getenv("REDIS_URL", "")
 
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=ALLOWED_HOSTS)
 
 
 #app.add_middleware(
@@ -80,11 +81,11 @@ app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*"])
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"https://.*\.vercel\.app|http://localhost:\d+",
+    allow_origins=CORS_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["*"],
+    expose_headers=["Content-Disposition"],
 )
 
 
@@ -212,6 +213,7 @@ async def upload_image(
 @app.post("/api/v1/batches", response_model=APIResponse)
 async def create_batch(
     batch_data: FermentationBatchCreate,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -229,14 +231,18 @@ async def create_batch(
             status="pending_start"
         )
         db.add(new_batch)
-        
-        # PERBAIKAN: waste_diverted_kg TIDAK lagi dihitung di sini.
-        # Limbah hanya dianggap "teralihkan" setelah batch berhasil selesai
-        # (status completed/harvested), bukan saat baru dibuat.
-        # Lihat endpoint update_batch_status untuk implementasi yang benar.
-        
         db.commit()
         db.refresh(new_batch)
+        
+        AuditService.log_from_request(
+            db=db,
+            request=request,
+            user_id=current_user.id,
+            action="CREATE",
+            resource_type="batch",
+            resource_id=new_batch.id,
+            details={"batch_name": new_batch.name, "waste_kg": new_batch.waste_weight_kg}
+        )
         
         logger.info(f"Batch created", extra={"user_id": current_user.id, "batch_id": new_batch.id})
         
@@ -296,14 +302,9 @@ async def list_batches(
         )
     except Exception as e:
         logger.error(f"Error fetching batches: {str(e)}", exc_info=True)
-        return APIResponse(
-            status="success",
-            data={
-                "batches": [],
-                "total": 0,
-                "limit": limit,
-                "offset": offset,
-            }
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch batches"
         )
 
 @app.get("/api/v1/batches/{batch_id}", response_model=APIResponse)
@@ -587,6 +588,7 @@ async def get_batch_daily_logs(
 async def update_batch_status(
     batch_id: int,
     status_data: BatchStatusUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -630,11 +632,22 @@ async def update_batch_status(
     db.commit()
     db.refresh(batch)
     
+    AuditService.log_from_request(
+        db=db,
+        request=request,
+        user_id=current_user.id,
+        action="UPDATE_STATUS",
+        resource_type="batch",
+        resource_id=batch_id,
+        details={"old_status": old_status, "new_status": new_status, "notes": status_data.notes}
+    )
+    
     return APIResponse(status="success", message="Status batch berhasil diperbarui", data={"id": batch.id, "status": batch.status})
 
 @app.delete("/api/v1/batches/{batch_id}", response_model=APIResponse)
 async def delete_batch(
     batch_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -645,6 +658,9 @@ async def delete_batch(
     
     if not batch:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch tidak ditemukan")
+    
+    batch_name = batch.name
+    batch_status = batch.status
         
     db.query(FermentationLog).filter(FermentationLog.batch_id == batch_id).delete()
     db.query(BatchDailyLog).filter(BatchDailyLog.batch_id == batch_id).delete()
@@ -656,6 +672,16 @@ async def delete_batch(
         
     db.delete(batch)
     db.commit()
+    
+    AuditService.log_from_request(
+        db=db,
+        request=request,
+        user_id=current_user.id,
+        action="DELETE",
+        resource_type="batch",
+        resource_id=batch_id,
+        details={"batch_name": batch_name, "batch_status": batch_status}
+    )
     
     return APIResponse(status="success", message="Batch berhasil dihapus")
 

@@ -79,6 +79,7 @@ async def get_product_recommendation(
         else:
             prod_rec = ProductRecommendation(
                 batch_id=batch_id,
+                user_id=current_user.id,
                 recommended_products_json=recommendations,
                 is_commercial_orientation=(rec_request.user_intent == "commercial")
             )
@@ -190,6 +191,7 @@ async def run_business_analysis(
         else:
             prod_rec = ProductRecommendation(
                 batch_id=batch_id,
+                user_id=current_user.id,
                 recommended_products_json=[],
                 business_analysis_json=analysis
             )

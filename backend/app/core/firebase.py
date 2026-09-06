@@ -7,7 +7,7 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS_PATH", "./firebase-credentials.json")
+FIREBASE_CREDENTIALS_PATH = os.getenv("FIREBASE_CREDENTIALS_JSON")
 
 # Inisialisasi Firebase Admin SDK
 def initialize_firebase():

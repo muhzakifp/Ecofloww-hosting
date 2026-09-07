@@ -80,7 +80,7 @@ export default function Home() {
             {[
               { label: 'Fitur', href: '#fitur' },
               { label: 'Cara Kerja', href: '#cara-kerja' },
-              { label: 'GitHub', href: 'https://github.com/GomalRajaGula/EcoFlow-AI', external: true },
+              { label: 'GitHub', href: 'https://github.com/muhzakifp/Ecofloww-hosting', external: true },
             ].map((item) =>
               item.external ? (
                 <a
@@ -406,7 +406,7 @@ export default function Home() {
               <a href="#cara-kerja" className="transition-colors hover:text-emerald-700">Cara Kerja</a>
               <Link href={targetHref} className="transition-colors hover:text-emerald-700">Dasbor</Link>
               <a
-                href="https://github.com/GomalRajaGula/EcoFlow-AI"
+                href="https://github.com/muhzakifp/Ecofloww-hosting"
                 target="_blank"
                 rel="noreferrer"
                 className="inline-flex items-center gap-1.5 transition-colors hover:text-emerald-700"

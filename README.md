@@ -3,7 +3,7 @@
 # 🌱 EcoFlow - Smart Eco-Enzyme Management System Powered by AI
 
 ### Submission for ITECHNO CUP 2026 - Web Development
-**by Achmal Maulana**
+**BISMILLAH TEMBUS**
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-Visit%20Site-brightgreen?style=for-the-badge&logo=vercel)](https://ecoflow-demo.vercel.app)
 [![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?style=for-the-badge&logo=github)](https://github.com/GomalRajaGula/prd-ecoflow-ai)
@@ -34,7 +34,10 @@
 
 | Nama | Role | GitHub |
 |------|------|--------|
-| **Achmal Maulana** | Project Lead & Full Stack Developer | [@GomalRajaGula](https://github.com/GomalRajaGula) |
+| **Firly Nurrohman** | Project Manager | [@firlyn113](https://github.com/firlyn113) |
+| **Achmal Maulana** | Backend Developer | [@GomalRajaGula](https://github.com/GomalRajaGula) |
+| **Muhammad Zaki** | Frontend Developer | [@muhzakifp](https://github.com/muhzakifp) |
+
 
 ---
 
@@ -339,8 +342,8 @@ Pastikan sudah terinstall:
 ### 1️⃣ Clone Repository
 
 ```bash
-git clone https://github.com/GomalRajaGula/prd-ecoflow-ai.git
-cd prd-ecoflow-ai
+git clone https://github.com/muhzakifp/Ecofloww-hosting.git
+cd Ecofloww-hosting
 ```
 
 ### 2️⃣ Setup Database & Services (Docker)
@@ -654,7 +657,7 @@ Lihat file [LICENSE](LICENSE) untuk detail lengkap.
 
 <div align="center">
 
-## 💚 Made with ❤️ by Achmal Maulana for ITECHNO CUP 2026
+## 💚 Made with ❤️ by BISMILLAH TEMBUS for ITECHNO CUP 2026
 
 **[⬆ Kembali ke Atas](#-ecoflow---smart-eco-enzyme-management-system-powered-by-ai)**
 

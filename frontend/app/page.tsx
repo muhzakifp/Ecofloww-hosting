@@ -133,7 +133,7 @@ export default function Home() {
               {[
                 { label: 'Fitur', href: '#fitur' },
                 { label: 'Cara Kerja', href: '#cara-kerja' },
-                { label: 'GitHub', href: 'https://github.com/GomalRajaGula/EcoFlow-AI', external: true },
+                { label: 'GitHub', href: 'https://github.com/muhzakifp/Ecofloww-hosting', external: true },
               ].map((item) => (
                 <a
                   key={item.label}
